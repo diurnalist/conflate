@@ -81,7 +81,7 @@ func TestMerge_SimpleMap(t *testing.T) {
 
 func TestMerge_SimpleSlice(t *testing.T) {
 	toData := []interface{}{1, 2, 3, 4}
-	fromData := []interface{}{4, 5, 6}
+	fromData := []interface{}{4, 4, 5, 6}
 	err := merge(&toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, toData, []interface{}{1, 2, 3, 4, 4, 5, 6})
@@ -119,6 +119,29 @@ func TestMerge_SliceOfPrimitive(t *testing.T) {
 		"a",
 		"b",
 		"c",
+	}
+	err := merge(&toData, fromData)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, toData)
+}
+
+func TestMerge_SliceOfEqualStructs(t *testing.T) {
+	type someStruct struct {
+		SomeField string
+	}
+	toData := []interface{}{
+		someStruct{"a"},
+		someStruct{"b"},
+	}
+	fromData := []interface{}{
+		someStruct{"a"},
+		someStruct{"b"},
+		someStruct{"c"},
+	}
+	expected := []interface{}{
+		someStruct{"a"},
+		someStruct{"b"},
+		someStruct{"c"},
 	}
 	err := merge(&toData, fromData)
 	assert.Nil(t, err)
