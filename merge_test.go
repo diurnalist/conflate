@@ -86,6 +86,7 @@ func TestMerge_SimpleSlice(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, toData, []interface{}{1, 2, 3, 4, 4, 5, 6})
 }
+
 func TestMerge_SliceOfMapsWithId(t *testing.T) {
 	toData := []interface{}{
 		map[string]interface{}{"id": "4"},
@@ -105,6 +106,7 @@ func TestMerge_SliceOfMapsWithId(t *testing.T) {
 	assert.Nil(t, err)
 	assert.Equal(t, expected, toData)
 }
+
 func TestMerge_SliceOfPrimitive(t *testing.T) {
 	toData := []interface{}{
 		"a",
@@ -142,6 +144,33 @@ func TestMerge_SliceOfEqualStructs(t *testing.T) {
 		someStruct{"a"},
 		someStruct{"b"},
 		someStruct{"c"},
+	}
+	err := merge(&toData, fromData)
+	assert.Nil(t, err)
+	assert.Equal(t, expected, toData)
+}
+
+func TestMerge_NestedRawJSON(t *testing.T) {
+	toData := map[string]interface{}{
+		"a": map[string]interface{}{
+			"nested-a1": "a1",
+		},
+		"b": map[string]interface{}{
+			"nested-b1": "b1",
+		},
+	}
+	fromData := map[string]interface{}{
+		"a": json.RawMessage(`{"nested-a2": "a2"}`),
+		"b": json.RawMessage(`{"nested-b1": "b1-override"}`),
+	}
+	expected := map[string]interface{}{
+		"a": map[string]interface{}{
+			"nested-a1": "a1",
+			"nested-a2": "a2",
+		},
+		"b": map[string]interface{}{
+			"nested-b1": "b1-override",
+		},
 	}
 	err := merge(&toData, fromData)
 	assert.Nil(t, err)
