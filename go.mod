@@ -1,4 +1,4 @@
-module github.com/zeitlinger/conflate
+module github.com/diurnalist/conflate
 
 go 1.19
 
