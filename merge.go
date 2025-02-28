@@ -1,6 +1,7 @@
 package conflate
 
 import (
+	"encoding/json"
 	"fmt"
 	"reflect"
 
@@ -38,14 +39,20 @@ func mergeRecursive(ctx context, pToData, fromData interface{}) error {
 		}
 	}
 
+	toVal := pToVal.Elem()
+	toData := toVal.Interface()
+
 	if fromData == nil {
 		return nil
 	}
 
-	toVal := pToVal.Elem()
+	// unpack handle nested raw JSON types from the source data
+	if fromDataAsJson, isJson := fromData.(json.RawMessage); isJson {
+		if err := json.Unmarshal(fromDataAsJson, &fromData); err != nil {
+			return err
+		}
+	}
 	fromVal := reflect.ValueOf(fromData)
-
-	toData := toVal.Interface()
 
 	if toVal.Interface() == nil {
 		toVal.Set(fromVal)
@@ -227,4 +234,16 @@ func mergeDefaultRecursive(ctx context, toVal, fromVal reflect.Value, toData, fr
 	toVal.Set(fromVal)
 
 	return nil
+}
+
+func lazyUnmarshalAs[T any](input interface{}) (T, bool) {
+	// unpack json.RawMessage
+	if asRaw, isJsonRaw := input.(json.RawMessage); isJsonRaw {
+		if err := json.Unmarshal(asRaw, &input); err != nil {
+			output, ok := input.(T)
+			return output, ok
+		}
+	}
+	output, ok := input.(T)
+	return output, ok
 }
