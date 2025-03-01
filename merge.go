@@ -7,9 +7,14 @@ import (
 	"github.com/mitchellh/hashstructure/v2"
 )
 
-func mergeTo(toData interface{}, fromData ...interface{}) error {
+type mergeContext struct {
+	sliceMergeBehavior SliceMergeBehavior
+	ctx                context
+}
+
+func mergeTo(mc mergeContext, toData interface{}, fromData ...interface{}) error {
 	for _, fromDatum := range fromData {
-		err := merge(toData, fromDatum)
+		err := merge(mc, toData, fromDatum)
 		if err != nil {
 			return err
 		}
@@ -18,14 +23,15 @@ func mergeTo(toData interface{}, fromData ...interface{}) error {
 	return nil
 }
 
-func merge(pToData, fromData interface{}) error {
-	return mergeRecursive(rootContext(), pToData, fromData)
+func merge(mc mergeContext, pToData, fromData interface{}) error {
+	mc.ctx = rootContext()
+	return mergeRecursive(mc, pToData, fromData)
 }
 
-func mergeRecursive(ctx context, pToData, fromData interface{}) error {
+func mergeRecursive(mc mergeContext, pToData, fromData interface{}) error {
 	if pToData == nil {
 		return &errWithContext{
-			context: ctx,
+			context: mc.ctx,
 			msg:     "the destination variable must not be nil",
 		}
 	}
@@ -33,7 +39,7 @@ func mergeRecursive(ctx context, pToData, fromData interface{}) error {
 	pToVal := reflect.ValueOf(pToData)
 	if pToVal.Kind() != reflect.Ptr {
 		return &errWithContext{
-			context: ctx,
+			context: mc.ctx,
 			msg:     "the destination variable must be a pointer",
 		}
 	}
@@ -58,21 +64,21 @@ func mergeRecursive(ctx context, pToData, fromData interface{}) error {
 	//nolint:exhaustive // to be refactored
 	switch fromVal.Kind() {
 	case reflect.Map:
-		err = mergeMapRecursive(ctx, toData, fromData)
+		err = mergeMapRecursive(mc, toData, fromData)
 	case reflect.Slice:
-		err = mergeSliceRecursive(ctx, toVal, toData, fromData)
+		err = mergeSliceRecursive(mc, toVal, toData, fromData)
 	default:
-		err = mergeDefaultRecursive(ctx, toVal, fromVal, toData, fromData)
+		err = mergeDefaultRecursive(mc, toVal, fromVal, toData, fromData)
 	}
 
 	return err
 }
 
-func mergeMapRecursive(ctx context, toData, fromData interface{}) error {
+func mergeMapRecursive(mc mergeContext, toData, fromData interface{}) error {
 	fromProps, ok := fromData.(map[string]interface{})
 	if !ok {
 		return &errWithContext{
-			context: ctx,
+			context: mc.ctx,
 			msg:     "the source value must be a map[string]interface{}",
 		}
 	}
@@ -80,7 +86,7 @@ func mergeMapRecursive(ctx context, toData, fromData interface{}) error {
 	toProps, _ := toData.(map[string]interface{})
 	if toProps == nil {
 		return &errWithContext{
-			context: ctx,
+			context: mc.ctx,
 			msg:     "the destination value must be a map[string]interface{}",
 		}
 	}
@@ -89,10 +95,10 @@ func mergeMapRecursive(ctx context, toData, fromData interface{}) error {
 		if val := toProps[name]; val == nil {
 			toProps[name] = fromProp
 		} else {
-			err := merge(&val, fromProp)
+			err := merge(mc, &val, fromProp)
 			if err != nil {
 				return &errWithContext{
-					context: ctx.add(name),
+					context: mc.ctx.add(name),
 					msg:     fmt.Sprintf("failed to merge object property : %v : %v", name, err.Error()),
 				}
 			}
@@ -104,11 +110,11 @@ func mergeMapRecursive(ctx context, toData, fromData interface{}) error {
 	return nil
 }
 
-func mergeSliceRecursive(ctx context, toVal reflect.Value, toData, fromData interface{}) error {
+func mergeSliceRecursive(mc mergeContext, toVal reflect.Value, toData, fromData interface{}) error {
 	fromItems, ok := fromData.([]interface{})
 	if !ok {
 		return &errWithContext{
-			context: ctx,
+			context: mc.ctx,
 			msg:     "the source value must be a []interface{}",
 		}
 	}
@@ -116,26 +122,26 @@ func mergeSliceRecursive(ctx context, toVal reflect.Value, toData, fromData inte
 	toItems, _ := toData.([]interface{})
 	if toItems == nil {
 		return &errWithContext{
-			context: ctx,
+			context: mc.ctx,
 			msg:     "the destination value must be a []interface{}",
 		}
 	}
 
 	var fromById = map[interface{}]interface{}{}
 	var toById = map[interface{}]interface{}{}
-	var seen = map[uint64]int{}
+	var seen = map[uint64][]int{}
 	addById(fromItems, fromById)
 	addById(toItems, toById)
 
 	var newItems []interface{}
-	for _, item := range toItems {
+	for idx, item := range toItems {
 		id := getId(item)
 		merged := false
 		if id != nil {
 			from := fromById[id]
 			to := toById[id]
 			if from != nil && to != nil {
-				err := merge(&to, from)
+				err := merge(mc, &to, from)
 				if err != nil {
 					return err
 				}
@@ -148,7 +154,7 @@ func mergeSliceRecursive(ctx context, toVal reflect.Value, toData, fromData inte
 			if err != nil {
 				return err
 			}
-			seen[hash] += 1
+			seen[hash] = append(seen[hash], idx)
 			newItems = append(newItems, item)
 		}
 	}
@@ -167,8 +173,8 @@ func mergeSliceRecursive(ctx context, toVal reflect.Value, toData, fromData inte
 		if err != nil {
 			return err
 		}
-		if seen[hash] > 0 {
-			seen[hash] -= 1
+		if len(seen[hash]) > 0 {
+			seen[hash] = seen[hash][1:] // shift the first seen index off
 			skipped = true
 		}
 
@@ -177,7 +183,25 @@ func mergeSliceRecursive(ctx context, toVal reflect.Value, toData, fromData inte
 		}
 	}
 
-	toVal.Set(reflect.ValueOf(newItems))
+	var mergedItems []interface{}
+	if mc.sliceMergeBehavior == SliceMergeBehaviorOverride {
+		// clean up any orphan values in destination
+		sentinel := struct{}{}
+		for _, idxs := range seen {
+			for _, idx := range idxs {
+				newItems[idx] = sentinel
+			}
+		}
+		for _, item := range newItems {
+			if item != sentinel {
+				mergedItems = append(mergedItems, item)
+			}
+		}
+	} else {
+		mergedItems = newItems
+	}
+
+	toVal.Set(reflect.ValueOf(mergedItems))
 
 	return nil
 }
@@ -205,7 +229,7 @@ func getId(item interface{}) interface{} {
 	return nil
 }
 
-func mergeDefaultRecursive(ctx context, toVal, fromVal reflect.Value, toData, fromData interface{}) error {
+func mergeDefaultRecursive(mc mergeContext, toVal, fromVal reflect.Value, toData, fromData interface{}) error {
 	if reflect.DeepEqual(toData, fromData) {
 		return nil
 	}
@@ -219,7 +243,7 @@ func mergeDefaultRecursive(ctx context, toVal, fromVal reflect.Value, toData, fr
 
 	if !fromType.AssignableTo(toType) {
 		return &errWithContext{
-			context: ctx,
+			context: mc.ctx,
 			msg:     fmt.Sprintf("the destination type (%v) must be the same as the source type (%v)", toType, fromType),
 		}
 	}

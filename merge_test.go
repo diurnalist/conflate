@@ -14,7 +14,7 @@ func TestMergeTo(t *testing.T) {
 	data1 := 1
 	data2 := 2
 	data3 := 3
-	err := mergeTo(&toData, data1, data2, data3)
+	err := mergeTo(mergeContext{}, &toData, data1, data2, data3)
 	assert.Nil(t, err)
 	assert.NotNil(t, toData)
 	assert.Equal(t, toData, data3)
@@ -24,7 +24,7 @@ func TestMergeTo_MergeError(t *testing.T) {
 	var toData interface{}
 
 	fromData := make(map[string]interface{})
-	err := mergeTo(toData, fromData)
+	err := mergeTo(mergeContext{}, toData, fromData)
 	assert.NotNil(t, err)
 }
 
@@ -32,7 +32,7 @@ func TestMerge(t *testing.T) {
 	toData := testMergeGetData(t, testMergeData1)
 	fromData := testMergeGetData(t, testMergeData2)
 	merged := testMergeGetData(t, testMergeData1)
-	err := merge(&merged, fromData)
+	err := merge(mergeContext{}, &merged, fromData)
 	assert.Nil(t, err)
 	testMergeCheck(t, merged, toData, fromData)
 }
@@ -41,7 +41,7 @@ func TestMergeReversed(t *testing.T) {
 	toData := testMergeGetData(t, testMergeData2)
 	fromData := testMergeGetData(t, testMergeData1)
 	merged := testMergeGetData(t, testMergeData2)
-	err := merge(&merged, fromData)
+	err := merge(mergeContext{}, &merged, fromData)
 	assert.Nil(t, err)
 	testMergeCheck(t, merged, toData, fromData)
 }
@@ -49,7 +49,7 @@ func TestMergeReversed(t *testing.T) {
 func TestMerge_SimpleString(t *testing.T) {
 	toData := "x"
 	fromData := "y"
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, "y", toData)
 }
@@ -57,7 +57,7 @@ func TestMerge_SimpleString(t *testing.T) {
 func TestMerge_SimpleInt(t *testing.T) {
 	toData := 1
 	fromData := 2
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, toData)
 }
@@ -65,7 +65,7 @@ func TestMerge_SimpleInt(t *testing.T) {
 func TestMerge_SimpleFloat(t *testing.T) {
 	toData := 1.0
 	fromData := 2.0
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, 2.0, toData)
 }
@@ -73,7 +73,7 @@ func TestMerge_SimpleFloat(t *testing.T) {
 func TestMerge_SimpleMap(t *testing.T) {
 	toData := map[string]interface{}{"x": 1}
 	fromData := map[string]interface{}{"x": 2, "y": 2}
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, 2, toData["x"])
 	assert.Equal(t, 2, toData["y"])
@@ -82,7 +82,7 @@ func TestMerge_SimpleMap(t *testing.T) {
 func TestMerge_SimpleSlice(t *testing.T) {
 	toData := []interface{}{1, 2, 3, 4}
 	fromData := []interface{}{4, 4, 5, 6}
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, toData, []interface{}{1, 2, 3, 4, 4, 5, 6})
 }
@@ -101,7 +101,7 @@ func TestMerge_SliceOfMapsWithId(t *testing.T) {
 		map[string]interface{}{"id": 3},
 		map[string]interface{}{"a": "4"},
 	}
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, expected, toData)
 }
@@ -120,7 +120,7 @@ func TestMerge_SliceOfPrimitive(t *testing.T) {
 		"b",
 		"c",
 	}
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, expected, toData)
 }
@@ -143,14 +143,14 @@ func TestMerge_SliceOfEqualStructs(t *testing.T) {
 		someStruct{"b"},
 		someStruct{"c"},
 	}
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, expected, toData)
 }
 
 func TestMerge_ToNil(t *testing.T) {
 	fromData := make(map[string]interface{})
-	err := merge(nil, fromData)
+	err := merge(mergeContext{}, nil, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "must not be nil")
 }
@@ -158,14 +158,14 @@ func TestMerge_ToNil(t *testing.T) {
 func TestMerge_ToNotPtr(t *testing.T) {
 	fromData := make(map[string]interface{})
 	toData := make(map[string]interface{})
-	err := merge(toData, fromData)
+	err := merge(mergeContext{}, toData, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "must be a pointer")
 }
 
 func TestMerge_FromNil(t *testing.T) {
 	data := make(map[string]interface{})
-	err := merge(&data, nil)
+	err := merge(mergeContext{}, &data, nil)
 	assert.Nil(t, err)
 	assert.Equal(t, data, data)
 }
@@ -175,7 +175,7 @@ func TestMerge_ToValNil(t *testing.T) {
 
 	var toData interface{}
 
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, toData, fromData)
 }
@@ -183,7 +183,7 @@ func TestMerge_ToValNil(t *testing.T) {
 func TestMerge_FromMapInvalid(t *testing.T) {
 	fromData := make(map[int]int)
 	toData := make(map[string]interface{})
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "source value must be a map[string]interface{}")
 }
@@ -191,7 +191,7 @@ func TestMerge_FromMapInvalid(t *testing.T) {
 func TestMerge_ToMapInvalid(t *testing.T) {
 	fromData := make(map[string]interface{})
 	toData := make(map[int]int)
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "destination value must be a map[string]interface{}")
 }
@@ -199,7 +199,7 @@ func TestMerge_ToMapInvalid(t *testing.T) {
 func TestMerge_FromSliceInvalid(t *testing.T) {
 	fromData := make([]int, 0)
 	toData := make([]interface{}, 0)
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "source value must be a []interface{}")
 }
@@ -207,7 +207,7 @@ func TestMerge_FromSliceInvalid(t *testing.T) {
 func TestMerge_ToSliceInvalid(t *testing.T) {
 	fromData := make([]interface{}, 0)
 	toData := make([]int, 0)
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "destination value must be a []interface{}")
 }
@@ -215,7 +215,7 @@ func TestMerge_ToSliceInvalid(t *testing.T) {
 func TestMerge_IntToSliceInvalid(t *testing.T) {
 	fromData := 123
 	toData := make([]int, 0)
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "the destination type ([]int) must be the same as the source type (int)")
 }
@@ -223,7 +223,7 @@ func TestMerge_IntToSliceInvalid(t *testing.T) {
 func TestMerge_IntToMapInvalid(t *testing.T) {
 	fromData := 123
 	toData := make(map[string]int)
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "the destination type (map[string]int) must be the same as the source type (int)")
 }
@@ -231,7 +231,7 @@ func TestMerge_IntToMapInvalid(t *testing.T) {
 func TestMerge_BadPropertyMerge(t *testing.T) {
 	toData := map[string]interface{}{"x": 1}
 	fromData := map[string]interface{}{"x": map[string]string{}}
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.NotNil(t, err)
 	assert.Contains(t, err.Error(), "failed to merge object property")
 }
@@ -239,7 +239,7 @@ func TestMerge_BadPropertyMerge(t *testing.T) {
 func TestMerge_Equal(t *testing.T) {
 	toData := map[string]interface{}{"x": 1}
 	fromData := map[string]interface{}{"x": 1}
-	err := merge(&toData, fromData)
+	err := merge(mergeContext{}, &toData, fromData)
 	assert.Nil(t, err)
 	assert.Equal(t, toData, fromData)
 }

@@ -7,21 +7,43 @@ import (
 // Includes is used to specify the top level key that holds the includes array.
 var Includes = "includes"
 
+type SliceMergeBehavior int
+
+const (
+	SliceMergeBehaviorUnion SliceMergeBehavior = iota
+	SliceMergeBehaviorOverride
+)
+
 // Conflate contains a 'working' merged data set and optionally a JSON v4 schema.
 type Conflate struct {
-	data   interface{}
-	loader loader
+	data               interface{}
+	loader             loader
+	sliceMergeBehavior SliceMergeBehavior
+}
+
+type Option func(c *Conflate)
+
+func WithSliceMergeBehavior(s SliceMergeBehavior) Option {
+	return func(c *Conflate) {
+		c.sliceMergeBehavior = s
+	}
 }
 
 // New constructs a new empty Conflate instance.
-func New() *Conflate {
+func New(opts ...Option) *Conflate {
 	initFormatCheckers()
 
-	return &Conflate{
+	c := &Conflate{
 		loader: loader{
 			newFiledata: newFiledata,
 		},
 	}
+
+	for _, opt := range opts {
+		opt(c)
+	}
+
+	return c
 }
 
 // FromFiles constructs a new Conflate instance populated with the data from the given files.
@@ -163,5 +185,5 @@ func (c *Conflate) addData(fdata ...filedata) error {
 func (c *Conflate) mergeData(fdata ...filedata) error {
 	doms := filedatas(fdata).objs()
 
-	return mergeTo(&c.data, doms...)
+	return mergeTo(mergeContext{sliceMergeBehavior: c.sliceMergeBehavior}, &c.data, doms...)
 }
